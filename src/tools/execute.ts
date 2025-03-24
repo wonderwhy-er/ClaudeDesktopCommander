@@ -14,7 +14,8 @@ export async function executeCommand(args: unknown) {
 
   const result = await terminalManager.executeCommand(
     parsed.data.command,
-    parsed.data.timeout_ms
+    parsed.data.timeout_ms,
+    parsed.data.shell
   );
 
   return {

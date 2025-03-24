@@ -14,8 +14,11 @@ export class TerminalManager {
   private sessions: Map<number, TerminalSession> = new Map();
   private completedSessions: Map<number, CompletedSession> = new Map();
   
-  async executeCommand(command: string, timeoutMs: number = DEFAULT_COMMAND_TIMEOUT): Promise<CommandExecutionResult> {
-    const process = spawn(command, [], { shell: true });
+  async executeCommand(command: string, timeoutMs: number = DEFAULT_COMMAND_TIMEOUT, shell?: string): Promise<CommandExecutionResult> {
+    const spawnOptions = { 
+      shell: shell || true
+    };
+    const process = spawn(command, [], spawnOptions);
     let output = '';
     
     // Ensure process.pid is defined before proceeding

@@ -23,9 +23,14 @@ import {
   SearchFilesArgsSchema,
   GetFileInfoArgsSchema,
   EditBlockArgsSchema,
+  GetConfigArgsSchema,
+  GetConfigValueArgsSchema,
+  SetConfigValueArgsSchema,
+  UpdateConfigArgsSchema,
 } from './tools/schemas.js';
 import { executeCommand, readOutput, forceTerminate, listSessions } from './tools/execute.js';
 import { listProcesses, killProcess } from './tools/process.js';
+import { getConfig, getConfigValue, setConfigValue, updateConfig } from './tools/config.js';
 import {
   readFile,
   readMultipleFiles,
@@ -41,6 +46,8 @@ import { parseEditBlock, performSearchReplace } from './tools/edit.js';
 
 import { VERSION } from './version.js';
 
+console.error("Loading server.ts");
+
 export const server = new Server(
   {
     name: "desktop-commander",
@@ -53,9 +60,39 @@ export const server = new Server(
   },
 );
 
+console.error("Setting up request handlers...");
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return {
-    tools: [
+  try {
+    console.error("Generating tools list...");
+    return {
+      tools: [
+      // Configuration tools
+      {
+        name: "get_config",
+        description:
+          "Get the complete server configuration as JSON.",
+        inputSchema: zodToJsonSchema(GetConfigArgsSchema),
+      },
+      {
+        name: "get_config_value",
+        description:
+          "Get a specific configuration value by key.",
+        inputSchema: zodToJsonSchema(GetConfigValueArgsSchema),
+      },
+      {
+        name: "set_config_value",
+        description:
+          "Set a specific configuration value by key.",
+        inputSchema: zodToJsonSchema(SetConfigValueArgsSchema),
+      },
+      {
+        name: "update_config",
+        description:
+          "Update multiple configuration values at once.",
+        inputSchema: zodToJsonSchema(UpdateConfigArgsSchema),
+      },
+      
       // Terminal tools
       {
         name: "execute_command",
@@ -203,8 +240,15 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             "Format: filepath, then <<<<<<< SEARCH, content to find, =======, new content, >>>>>>> REPLACE.",
         inputSchema: zodToJsonSchema(EditBlockArgsSchema),
       },
-    ],
-  };
+      ],
+    };
+  } catch (error) {
+    console.error(`Error generating tools list: ${error instanceof Error ? error.message : String(error)}`);
+    if (error instanceof Error && error.stack) {
+      console.error(error.stack);
+    }
+    throw error;
+  }
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest) => {
@@ -212,6 +256,48 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     const { name, arguments: args } = request.params;
 
     switch (name) {
+      // Config tools
+      case "get_config":
+        try {
+          return await getConfig();
+        } catch (error) {
+          console.error(`Error in get_config handler: ${error}`);
+          return {
+            content: [{ type: "text", text: `Error: Failed to get configuration` }],
+            isError: true,
+          };
+        }
+      case "get_config_value": 
+        try {
+          return await getConfigValue(args);
+        } catch (error) {
+          console.error(`Error in get_config_value handler: ${error}`);
+          return {
+            content: [{ type: "text", text: `Error: Failed to get configuration value` }],
+            isError: true,
+          };
+        }
+      case "set_config_value":
+        try {
+          return await setConfigValue(args);
+        } catch (error) {
+          console.error(`Error in set_config_value handler: ${error}`);
+          return {
+            content: [{ type: "text", text: `Error: Failed to set configuration value` }],
+            isError: true,
+          };
+        }
+      case "update_config":
+        try {
+          return await updateConfig(args);
+        } catch (error) {
+          console.error(`Error in update_config handler: ${error}`);
+          return {
+            content: [{ type: "text", text: `Error: Failed to update configuration` }],
+            isError: true,
+          };
+        }
+      
       // Terminal tools
       case "execute_command": {
         const parsed = ExecuteCommandArgsSchema.parse(args);
@@ -333,7 +419,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           }],
         };
       }
+      // Config tools
+      case "get_config":
+        console.error("Handling get_config request");
+        return getConfig();
+      case "get_config_value": {
+        console.error("Handling get_config_value request");
+        const parsed = GetConfigValueArgsSchema.parse(args);
+        return getConfigValue(parsed);
+      }
+      case "set_config_value": {
+        console.error("Handling set_config_value request");
+        const parsed = SetConfigValueArgsSchema.parse(args);
+        return setConfigValue(parsed);
+      }
+      case "update_config": {
+        console.error("Handling update_config request");
+        const parsed = UpdateConfigArgsSchema.parse(args);
+        return updateConfig(parsed);
+      }
+
       default:
+        console.error(`Unknown tool: ${name}`);
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
