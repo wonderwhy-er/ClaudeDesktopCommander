@@ -24,7 +24,7 @@
     "build": "tsc && shx cp setup-claude-server.js dist/ && shx chmod +x dist/*.js",
     "watch": "tsc --watch",
     "start": "node dist/index.js",
-    "setup": "npm install && npm run build && node setup-claude-server.js",
+    "setup": "npm install && npm run build && node --experimental-network-imports setup-claude-server.js",
     "prepare": "npm run build",
     "test": "node test/test.js",
     "test:watch": "nodemon test/test.js",
@@ -63,7 +63,7 @@
     "zod-to-json-schema": "^3.23.5"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
+    "@types/node": "^20.17.24",
     "nodemon": "^3.0.2",
     "shx": "^0.3.4",
     "typescript": "^5.3.3"

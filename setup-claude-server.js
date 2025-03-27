@@ -4,6 +4,7 @@ import { readFileSync, writeFileSync, existsSync, appendFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 
+// Fix for Windows ESM path resolution
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -66,50 +67,61 @@ if (!existsSync(claudeConfigPath)) {
     logToFile('Default config file created. Please update it with your Claude API credentials.');
 }
 
-try {
-    // Read existing config
-    const configData = readFileSync(claudeConfigPath, 'utf8');
-    const config = JSON.parse(configData);
+// Main function to export for ESM compatibility
+export default async function setup() {
+    try {
+        // Read existing config
+        const configData = readFileSync(claudeConfigPath, 'utf8');
+        const config = JSON.parse(configData);
 
-    // Prepare the new server config based on OS
-    // Determine if running through npx or locally
-    const isNpx =  import.meta.url.endsWith('dist/setup-claude-server.js');
+        // Prepare the new server config based on OS
+        // Determine if running through npx or locally
+        const isNpx = import.meta.url.includes('node_modules');
 
-    const serverConfig = isNpx ? {
-        "command": "npx",
-        "args": [
-            "@wonderwhy-er/desktop-commander"
-        ]
-    } : {
-        "command": "node",
-        "args": [
-            join(__dirname, 'dist', 'index.js')
-        ]
-    };
+        // Fix Windows path handling for npx execution
+        let serverConfig;
+        if (isNpx) {
+            serverConfig = {
+                "command": isWindows ? "npx.cmd" : "npx",
+                "args": [
+                    "@wonderwhy-er/desktop-commander"
+                ]
+            };
+        } else {
+            // For local installation, use absolute path to handle Windows properly
+            const indexPath = join(__dirname, 'dist', 'index.js');
+            serverConfig = {
+                "command": "node",
+                "args": [
+                    indexPath.replace(/\\/g, '\\\\') // Double escape backslashes for JSON
+                ]
+            };
+        }
 
-    // Add or update the terminal server config
-    if (!config.mcpServers) {
-        config.mcpServers = {};
+        // Add or update the terminal server config
+        if (!config.mcpServers) {
+            config.mcpServers = {};
+        }
+        
+        config.mcpServers.desktopCommander = serverConfig;
+
+        // Write the updated config back
+        writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2), 'utf8');
+        
+        logToFile('Successfully added MCP servers to Claude configuration!');
+        logToFile(`Configuration location: ${claudeConfigPath}`);
+        logToFile('\nTo use the servers:\n1. Restart Claude if it\'s currently running\n2. The servers will be available in Claude\'s MCP server list');
+        
+    } catch (error) {
+        logToFile(`Error updating Claude configuration: ${error}`, true);
+        process.exit(1);
     }
-    
-    config.mcpServers.desktopCommander = serverConfig;
+}
 
-    // Add puppeteer server if not present
-    /*if (!config.mcpServers.puppeteer) {
-        config.mcpServers.puppeteer = {
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-puppeteer"]
-        };
-    }*/
-
-    // Write the updated config back
-    writeFileSync(claudeConfigPath, JSON.stringify(config, null, 2), 'utf8');
-    
-    logToFile('Successfully added MCP servers to Claude configuration!');
-    logToFile(`Configuration location: ${claudeConfigPath}`);
-    logToFile('\nTo use the servers:\n1. Restart Claude if it\'s currently running\n2. The servers will be available in Claude\'s MCP server list');
-    
-} catch (error) {
-    logToFile(`Error updating Claude configuration: ${error}`, true);
-    process.exit(1);
+// Allow direct execution
+if (process.argv.length >= 2 && process.argv[1] === fileURLToPath(import.meta.url)) {
+    setup().catch(error => {
+        logToFile(`Fatal error: ${error}`, true);
+        process.exit(1);
+    });
 }
