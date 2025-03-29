@@ -46,7 +46,7 @@ async function execAsync(command) {
     return new Promise((resolve, reject) => {
       // Use PowerShell on Windows for better Unicode support and consistency
       const actualCommand = isWindows
-      ? `cmd.exe /c "${command.replace(/"/g, '\\"')}"` 
+      ? `cmd.exe /c ${command}` 
       : command;
         
       exec(actualCommand, (error, stdout, stderr) => {
@@ -61,12 +61,16 @@ async function execAsync(command) {
 
 async function restartClaude() {
 	try {
-		const platform = process.platform
+        const platform = process.platform
         switch (platform) {
             case "win32":
-                await execAsync(
-                    `taskkill /F /IM "Claude.exe"`,
-                )
+                // ignore errors on windows when claude is not running.
+                // just silently kill the process
+                try  {
+                    await execAsync(
+                        `taskkill /F /IM "Claude.exe"`,
+                    )
+                } catch {}
                 break;
             case "darwin":
                 await execAsync(
@@ -82,7 +86,8 @@ async function restartClaude() {
 		await new Promise((resolve) => setTimeout(resolve, 3000))
 
 		if (platform === "win32") {
-			await execAsync(`start "" "Claude.exe"`)
+            // it will never start claude
+			// await execAsync(`start "" "Claude.exe"`)
 		} else if (platform === "darwin") {
 			await execAsync(`open -a "Claude"`)
 		} else if (platform === "linux") {
