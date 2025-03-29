@@ -27,7 +27,7 @@ Short version. Two key things. Terminal commands and diff based file editing.
 - [Contributing](#contributing)
 - [License](#license)
 
-This is server that allows Claude desktop app to execute long-running terminal commands on your computer and manage processes through Model Context Protocol (MCP) + Built on top of [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) to provide additional search and replace file editing capabilities .
+This is server that allows Claude desktop app to execute long-running terminal commands on your computer and manage processes through Model Context Protocol (MCP) + Built on top of [MCP Filesystem Server](https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem) to provide additional search and replace file editing capabilities.
 
 ## Features
 
@@ -75,7 +75,10 @@ Add this entry to your claude_desktop_config.json (on Mac, found at ~/Library/Ap
       "command": "npx",
       "args": [
         "-y",
-        "@wonderwhy-er/desktop-commander"
+        "@wonderwhy-er/desktop-commander",
+        "--auth=all,-unblock_command",
+        "--block=git push,sudo,dd",
+        "--mode=granular"
       ]
     }
   }
@@ -100,6 +103,40 @@ The setup command will:
 
 ## Usage
 
+The server now exposes a single primary tool named `desktop_commander`. You specify the desired operation using the `subtool` parameter within the tool arguments.
+
+### Configuration Parameters
+
+You can configure the server's behavior using command-line arguments when launching it (or via the `args` array in `claude_desktop_config.json`). The primary arguments are:
+
+*   `--mode=[granular|grouped|unified]` (Default: `granular`)
+    *   Controls how tools are presented to the AI (granular, grouped by category, or one unified tool).
+    *   `granular`: Lists each subtool as a separate tool name (e.g., `read_file`, `execute_command`).
+    *   `grouped`: Lists tools grouped by category (`read`, `write`, `execute`).
+    *   `unified`: Lists only a single unified tool named `command`.
+    *   **Note:** This only affects the `ListTools` response. The underlying tool called is always `desktop_commander` (or the specific subtool name in granular mode).
+
+*   `--auth=[permission_string]` (Default: `all`)
+    *   Controls which operations (subtools) are allowed. This is the **only** argument for managing permissions.
+    *   The `permission_string` is a comma-separated list which can include:
+        *   **Categories**: `read`, `write`, `execute` (allow all tools in that category).
+        *   **Specific tool names**: `read_file`, `execute_command`, etc. (allow only that tool).
+        *   **Special values**: `all` (allow everything), `none` (allow nothing).
+        *   **Negations**: `-tool_name` or `-category` (e.g., `all,-kill_process` allows everything *except* `kill_process`). Negations only work when `all` is also present.
+    *   **Examples:**
+        *   `--auth=read` (Allow only read operations)
+        *   `--auth=read,write` (Allow read and write, but no execute)
+        *   `--auth=all,-kill_process,-unblock_command` (Allow all except killing processes and unblocking commands)
+        *   `--auth=read_file,list_directory,search_code` (Allow only these specific read tools)
+        *   `--auth=read,write,execute_command` (Allow read, write, and only the `execute_command` tool from the execute category)
+
+*   `--block=[command_list]` (Default: none)
+    *   A comma-separated list of specific shell commands (like `sudo`, `rm`, `mount`) to prevent execution via the `execute_command` subtool.
+    *   Example: `--block="git push,sudo,dd"`
+    *   These are combined with commands listed in `config.json`. Use `list_blocked_commands` to see the current list.
+
+### Available Subtools for `desktop_commander`
+
 The server provides these tool categories:
 
 ### Terminal Tools
@@ -113,17 +150,17 @@ The server provides these tool categories:
 
 ### Filesystem Tools
 - `read_file`/`write_file`: File operations
-- `create_directory`/`list_directory`: Directory management  
+- `create_directory`/`list_directory`: Directory management
 - `move_file`: Move/rename files
 - `search_files`: Pattern-based file search
 - `get_file_info`: File metadata
-- `code_search`: Recursive ripgrep based text and code search
+- `search_code`: Recursive ripgrep based text and code search
 
 ### Edit Tools
 - `edit_block`: Apply surgical text replacements (best for changes <20% of file size)
 - `write_file`: Complete file rewrites (best for large changes >20% or when edit_block fails)
 
-Search/Replace Block Format:
+The format for `edit_block` is:
 ```
 filepath.ext
 <<<<<<< SEARCH
